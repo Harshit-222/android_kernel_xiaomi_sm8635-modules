@@ -12,6 +12,7 @@
 #include <linux/types.h>
 #include <linux/tracepoint.h>
 #include "smcinvoke.h"
+#include <linux/stringify.h>
 
 TRACE_EVENT(put_pending_cbobj_locked,
 	TP_PROTO(uint16_t srvr_id, uint16_t obj_id),
