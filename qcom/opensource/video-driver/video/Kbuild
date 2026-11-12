@@ -8,6 +8,11 @@ include $(VIDEO_ROOT)/config/pineapple_video.conf
 LINUXINCLUDE   += -include $(VIDEO_ROOT)/config/pineapple_video.h
 endif
 
+ifeq ($(CONFIG_ARCH_VOLCANO), y)
+include $(VIDEO_ROOT)/config/volcano_video.conf
+LINUXINCLUDE   += -include $(VIDEO_ROOT)/config/volcano_video.h
+endif
+
 ifeq ($(CONFIG_MSM_VIDC_PINEAPPLE), y)
 LINUXINCLUDE   += -I$(VIDEO_DRIVER_ABS_PATH)/platform/pineapple/inc \
                   -I$(VIDEO_DRIVER_ABS_PATH)/platform/cliffs/inc \

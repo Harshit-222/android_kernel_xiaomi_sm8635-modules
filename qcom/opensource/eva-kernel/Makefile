@@ -1,9 +1,11 @@
 KBUILD_OPTIONS+= EVA_ROOT=$(KERNEL_SRC)/$(M)
 
 KBUILD_EXTRA_SYMBOLS := \
-    $(OUT_DIR)/../sm8635-modules/qcom/opensource/mmrm-driver/Module.symvers \
-    $(OUT_DIR)/../sm8635-modules/qcom/opensource/synx-kernel/Module.symvers \
-    $(OUT_DIR)/../sm8635-modules/qcom/opensource/dsp-kernel/Module.symvers
+    $(M)/../mmrm-driver/Module.symvers \
+    $(M)/../synx-kernel/Module.symvers \
+    $(M)/../dsp-kernel/Module.symvers
+
+KBUILD_OPTIONS += KBUILD_EXTRA_SYMBOLS="$(KBUILD_EXTRA_SYMBOLS)"
 
 all:
 	$(MAKE) -C $(KERNEL_SRC) M=$(M) modules $(KBUILD_OPTIONS)

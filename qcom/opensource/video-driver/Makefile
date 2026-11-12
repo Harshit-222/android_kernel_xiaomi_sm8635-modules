@@ -4,16 +4,19 @@ KBUILD_OPTIONS += VIDEO_ROOT=$(KERNEL_SRC)/$(M)
 KBUILD_OPTIONS += BOARD_PLATFORM=$(TARGET_BOARD_PLATFORM)
 KBUILD_OPTIONS += $(VIDEO_SELECT)
 
-KBUILD_OPTIONS += KBUILD_EXTRA_SYMBOLS=$(OUT_DIR)/../sm8635-modules/qcom/opensource/mmrm-driver/Module.symvers
+KBUILD_OPTIONS += KBUILD_EXTRA_SYMBOLS="$(M)/../mmrm-driver/Module.symvers"
 
 all:
-	$(MAKE) -C $(KERNEL_SRC) M=$(M) modules $(KBUILD_OPTIONS)
+	$(MAKE) -C $(KERNEL_SRC) M=$(M)/msm_video modules $(KBUILD_OPTIONS)
+	$(MAKE) -C $(KERNEL_SRC) M=$(M)/video modules $(KBUILD_OPTIONS)
 
 modules_install:
-	$(MAKE) INSTALL_MOD_STRIP=1 -C $(KERNEL_SRC) M=$(M) modules_install
+	$(MAKE) INSTALL_MOD_STRIP=1 -C $(KERNEL_SRC) M=$(M)/msm_video modules_install
+	$(MAKE) INSTALL_MOD_STRIP=1 -C $(KERNEL_SRC) M=$(M)/video modules_install
 
 %:
-	$(MAKE) -C $(KERNEL_SRC) M=$(M) $@ $(KBUILD_OPTIONS)
+	$(MAKE) -C $(KERNEL_SRC) M=$(M)/msm_video $@ $(KBUILD_OPTIONS)
+	$(MAKE) -C $(KERNEL_SRC) M=$(M)/video $@ $(KBUILD_OPTIONS)
 
 clean:
 	rm -f *.o *.ko *.mod.c *.mod.o *~ .*.cmd Module.symvers

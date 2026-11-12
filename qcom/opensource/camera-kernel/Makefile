@@ -4,15 +4,17 @@ KBUILD_OPTIONS += CAMERA_KERNEL_ROOT=$(KERNEL_SRC)/$(M)
 KBUILD_OPTIONS += KERNEL_ROOT=$(KERNEL_SRC)
 KBUILD_OPTIONS += MODNAME=camera
 KBUILD_OPTIONS += BOARD_PLATFORM=$(TARGET_BOARD_PLATFORM)
-KBUILD_OPTIONS+= KBUILD_EXTRA_SYMBOLS="$(M)/../mmrm-driver/Module.symvers $(M)/../securemsm-kernel/Module.symvers"
+
 KBUILD_EXTRA_SYMBOLS := \
-    $(OUT_DIR)/../sm8635-modules/qcom/opensource/mmrm-driver/Module.symvers \
-    $(OUT_DIR)/../sm8635-modules/qcom/opensource/securemsm-kernel/Module.symvers
+    $(M)/../mmrm-driver/Module.symvers \
+    $(M)/../securemsm-kernel/Module.symvers
 
 ifneq ($(BOARD_PLATFORM), volcano)
 KBUILD_EXTRA_SYMBOLS += \
-    $(OUT_DIR)/../sm8635-modules/qcom/opensource/synx-kernel/Module.symvers
+    $(M)/../synx-kernel/Module.symvers
 endif
+
+KBUILD_OPTIONS+= KBUILD_EXTRA_SYMBOLS="$(KBUILD_EXTRA_SYMBOLS)"
 
 all: modules
 
