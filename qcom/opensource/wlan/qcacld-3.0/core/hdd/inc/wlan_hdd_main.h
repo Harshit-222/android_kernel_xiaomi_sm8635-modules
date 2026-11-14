@@ -919,12 +919,6 @@ struct hdd_ap_ctx {
 #endif
 };
 
-struct hdd_monitor_ctx {
-	qdf_freq_t freq;
-	enum phy_ch_width bandwidth;
-	enum phy_ch_width ch_width;
-};
-
 /**
  * struct hdd_scan_info - Per-adapter scan information
  * @scan_add_ie: Additional IE for scan
@@ -1134,7 +1128,6 @@ struct wlan_hdd_link_info {
 	union {
 		struct hdd_station_ctx station;
 		struct hdd_ap_ctx ap;
-		struct hdd_monitor_ctx monitor;
 	} session;
 
 	qdf_event_t acs_complete_event;
@@ -1506,7 +1499,6 @@ struct hdd_adapter {
 
 #define WLAN_HDD_GET_STATION_CTX_PTR(link_info) (&(link_info)->session.station)
 #define WLAN_HDD_GET_AP_CTX_PTR(link_info) (&(link_info)->session.ap)
-#define WLAN_HDD_GET_MONITOR_CTX_PTR(link_info) (&(link_info)->session.monitor)
 #define WLAN_HDD_GET_CTX(adapter) ((adapter)->hdd_ctx)
 #define WLAN_HDD_GET_HOSTAP_STATE_PTR(link_info) \
 		(&(WLAN_HDD_GET_AP_CTX_PTR((link_info))->hostapd_state))
@@ -2053,10 +2045,6 @@ enum wlan_state_ctrl_str_id {
  * @num_mlo_peers: Total number of MLO peers
  * @more_peer_data: more mlo peer data in peer stats
  * @lpc_info: Local packet capture info
- * @monitor_restore_work: work that reopens a station preserved for monitor use
- * @monitor_restore_work_status: initialization state of monitor restore work
- * @monitor_restore_iface: name of the preserved station interface
- * @monitor_restore_pending: whether a preserved station needs reopening
  */
 struct hdd_context {
 	struct wlan_objmgr_psoc *psoc;
@@ -2340,12 +2328,6 @@ struct hdd_context {
 #endif
 #ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
 	struct hdd_lpc_info lpc_info;
-#endif
-#ifdef FEATURE_FRAME_INJECTION_SUPPORT
-	qdf_work_t monitor_restore_work;
-	enum hdd_work_status monitor_restore_work_status;
-	char monitor_restore_iface[IFNAMSIZ];
-	bool monitor_restore_pending;
 #endif
 };
 
