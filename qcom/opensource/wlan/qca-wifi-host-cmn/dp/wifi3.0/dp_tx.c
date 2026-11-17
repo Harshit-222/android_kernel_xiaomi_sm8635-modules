@@ -54,6 +54,19 @@
 #include <dp_sawf.h>
 #endif
 
+#ifdef FEATURE_FRAME_INJECTION_SUPPORT
+#define DP_TX_INJECTION_DESC_PREFIX 0xf000
+
+static inline bool dp_tx_is_injection_nbuf(qdf_nbuf_t nbuf)
+{
+	return (QDF_NBUF_CB_MGMT_TXRX_DESC_ID(nbuf) &
+		DP_TX_INJECTION_DESC_PREFIX) == DP_TX_INJECTION_DESC_PREFIX;
+}
+
+extern bool wma_injection_dp_complete(void *wma_context, qdf_nbuf_t nbuf,
+				      int32_t status);
+#endif
+
 /* Flag to skip CCE classify when mesh or tid override enabled */
 #define DP_TX_SKIP_CCE_CLASSIFY \
 	(DP_TXRX_HLOS_TID_OVERRIDE_ENABLED | DP_TX_MESH_ENABLED)
@@ -471,14 +484,9 @@ static uint8_t dp_tx_prepare_htt_metadata(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 	    msdu_info->exception_fw) {
 		if (qdf_unlikely(qdf_nbuf_headroom(nbuf) <
 				 htt_desc_size_aligned)) {
-			nbuf = qdf_nbuf_realloc_headroom(nbuf,
-							 htt_desc_size_aligned);
-			if (!nbuf) {
-				/*
-				 * qdf_nbuf_realloc_headroom won't do skb_clone
-				 * as skb_realloc_headroom does. so, no free is
-				 * needed here.
-				 */
+			if (qdf_nbuf_is_cloned(nbuf) || skb_shared(nbuf) ||
+			    pskb_expand_head(nbuf, htt_desc_size_aligned, 0,
+					     GFP_ATOMIC)) {
 				DP_STATS_INC(vdev,
 					     tx_i[msdu_info->xmit_type].dropped.headroom_insufficient,
 					     1);
@@ -1285,8 +1293,11 @@ struct dp_tx_desc_s *dp_tx_prepare_desc_single(struct dp_vdev *vdev,
 
 		htt_hdr_size = dp_tx_prepare_htt_metadata(vdev, nbuf,
 				msdu_info);
-		if (htt_hdr_size == 0)
+		if (htt_hdr_size == 0) {
+			if (align_pad)
+				qdf_nbuf_pull_head(nbuf, align_pad);
 			goto failure;
+		}
 
 		tx_desc->length = qdf_nbuf_headlen(nbuf);
 		tx_desc->pkt_offset = align_pad + htt_hdr_size;
@@ -1774,7 +1785,9 @@ static void dp_tx_get_tid(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 	} else {
 		qdf_dot3_qosframe_t *qos_wh =
 			(qdf_dot3_qosframe_t *) nbuf->data;
-		msdu_info->tid = qos_wh->i_fc[0] & DP_FC0_SUBTYPE_QOS ?
+		msdu_info->tid = (qdf_nbuf_len(nbuf) >= sizeof(*qos_wh) &&
+				  DP_FRAME_IS_DATA(qos_wh) &&
+				  (qos_wh->i_fc[0] & DP_FC0_SUBTYPE_QOS)) ?
 			qos_wh->i_qos[0] & DP_QOS_TID : 0;
 		return;
 	}
@@ -3135,10 +3148,15 @@ dp_tx_send_msdu_single(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 	return NULL;
 
 release_desc:
+	if (tx_desc->pkt_offset)
+		qdf_nbuf_pull_head(nbuf, tx_desc->pkt_offset);
 	dp_tx_desc_release(soc, tx_desc, tx_q->desc_pool_id);
 
 fail_return:
 	dp_tx_get_tid(vdev, nbuf, msdu_info);
+	tid = msdu_info->tid;
+	if (qdf_unlikely(tid >= CDP_MAX_DATA_TIDS))
+		tid = CDP_MAX_DATA_TIDS - 1;
 	tx_sw_drop_stats_inc(pdev, nbuf, drop_code);
 	tid_stats = &pdev->stats.tid_stats.
 		    tid_tx_stats[tx_q->ring_id][tid];
@@ -3184,6 +3202,11 @@ qdf_nbuf_t dp_tx_comp_free_buf(struct dp_soc *soc, struct dp_tx_desc_s *desc,
 
 	if (!dp_tdls_tx_comp_free_buff(soc, desc))
 		return NULL;
+
+#ifdef FEATURE_FRAME_INJECTION_SUPPORT
+	if (dp_tx_is_injection_nbuf(nbuf))
+		wma_injection_dp_complete(NULL, nbuf, 0);
+#endif
 
 	/* 0 : MSDU buffer, 1 : MLE */
 	if (desc->msdu_ext_desc) {
@@ -4167,8 +4190,10 @@ dp_tx_send_exception_vdev_id_check(struct cdp_soc_t *soc_hdl,
 	if (qdf_unlikely(!vdev))
 		goto fail;
 
-	if (qdf_unlikely(dp_tx_per_pkt_vdev_id_check(nbuf, vdev)
-			== QDF_STATUS_E_FAILURE)) {
+	if (qdf_unlikely((!tx_exc_metadata || !tx_exc_metadata->is_tx_sniffer) &&
+			 vdev->tx_encap_type != htt_cmn_pkt_type_raw &&
+			 dp_tx_per_pkt_vdev_id_check(nbuf, vdev)
+			 == QDF_STATUS_E_FAILURE)) {
 		DP_STATS_INC(vdev,
 			     tx_i[xmit_type].dropped.fail_per_pkt_vdev_id_check,
 			     1);
@@ -4627,6 +4652,14 @@ void dp_tx_reinject_handler(struct dp_soc *soc,
 
 	qdf_assert(vdev);
 
+#ifdef FEATURE_FRAME_INJECTION_SUPPORT
+	if (nbuf && dp_tx_is_injection_nbuf(nbuf)) {
+		dp_tx_comp_free_buf(soc, tx_desc, false);
+		dp_tx_desc_release(soc, tx_desc, tx_desc->pool_id);
+		return;
+	}
+#endif
+
 	dp_tx_debug("Tx reinject path");
 
 	DP_STATS_INC_PKT(vdev, tx_i[xmit_type].reinject_pkts, 1,
@@ -4739,6 +4772,14 @@ void dp_tx_inspect_handler(struct dp_soc *soc,
 
 	DP_STATS_INC_PKT(vdev, tx_i[xmit_type].inspect_pkts, 1,
 			 qdf_nbuf_len(tx_desc->nbuf));
+
+#ifdef FEATURE_FRAME_INJECTION_SUPPORT
+	if (tx_desc->nbuf && dp_tx_is_injection_nbuf(tx_desc->nbuf)) {
+		dp_tx_comp_free_buf(soc, tx_desc, false);
+		dp_tx_desc_release(soc, tx_desc, tx_desc->pool_id);
+		return;
+	}
+#endif
 
 	DP_TX_FREE_SINGLE_BUF(soc, tx_desc->nbuf);
 	dp_tx_desc_release(soc, tx_desc, tx_desc->pool_id);
@@ -6089,7 +6130,13 @@ void dp_tx_comp_process_tx_status(struct dp_soc *soc,
 		goto out;
 	}
 
+#ifdef FEATURE_FRAME_INJECTION_SUPPORT
+	if (dp_tx_is_injection_nbuf(nbuf))
+		wma_injection_dp_complete(NULL, nbuf, ts->status);
+#endif
+
 	eh = (qdf_ether_header_t *)qdf_nbuf_data(nbuf);
+
 	length = dp_tx_get_pkt_len(tx_desc);
 
 	dp_status = dp_tx_hw_to_qdf(ts->status);

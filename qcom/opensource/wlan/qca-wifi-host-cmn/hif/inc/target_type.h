@@ -114,6 +114,11 @@ extern "C" {
 #define TARGET_TYPE_QCN6432   39
 #endif
 
+/* Orne */
+#ifndef TARGET_TYPE_WCN7750
+#define TARGET_TYPE_WCN7750	40
+#endif
+
 #ifdef __cplusplus
 }
 #endif

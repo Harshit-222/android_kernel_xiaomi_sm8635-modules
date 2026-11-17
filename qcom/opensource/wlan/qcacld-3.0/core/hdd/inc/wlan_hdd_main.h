@@ -2045,6 +2045,10 @@ enum wlan_state_ctrl_str_id {
  * @num_mlo_peers: Total number of MLO peers
  * @more_peer_data: more mlo peer data in peer stats
  * @lpc_info: Local packet capture info
+ * @monitor_restore_work: work that reopens a station preserved for monitor use
+ * @monitor_restore_work_status: initialization state of monitor restore work
+ * @monitor_restore_iface: name of the preserved station interface
+ * @monitor_restore_pending: whether a preserved station needs reopening
  */
 struct hdd_context {
 	struct wlan_objmgr_psoc *psoc;
@@ -2328,6 +2332,12 @@ struct hdd_context {
 #endif
 #ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
 	struct hdd_lpc_info lpc_info;
+#endif
+#ifdef FEATURE_FRAME_INJECTION_SUPPORT
+	qdf_work_t monitor_restore_work;
+	enum hdd_work_status monitor_restore_work_status;
+	char monitor_restore_iface[IFNAMSIZ];
+	bool monitor_restore_pending;
 #endif
 };
 
